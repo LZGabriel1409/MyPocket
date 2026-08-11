@@ -1,61 +1,62 @@
 <?php
-class Carteira
-{
-    private $saldo;
-    private $historico;
+require_once "conexao.php";
 
-    public function __construct()
-    {
-        $this->saldo = isset($_SESSION["saldo"])
-            ? $_SESSION["saldo"] : 0;
-        $this->historico = isset($_SESSION["historico"])
-            ? $_SESSION["historico"] : array();
+class Carteira{
+    private $pdo;
+
+    public function __construct(){
+        global $pdo;
+        $this->pdo = $pdo;
     }
 
-    public function adicionarReceita($transacao)
-    {
-        $this->saldo += $transacao->getValor();
-        $this->historico[] = array(
-            "valor" => $transacao->getValor(),
-            "descricao" => $transacao->getDescricao(),
-            "data" => $transacao->getData(),
-            "tipo" => $transacao->getTipo()
-        );
-        $this->salvar();
+    private function adicionarTransacao($transacao){
+        $sql = "INSERT INTO transacoes
+                (valor, descricao, data, tipo)
+                VALUES (?, ?, ?, ?)";
+
+        $stmt = $this->pdo->prepare($sql);
+
+        $stmt->execute([
+            $transacao->getValor(),
+            $transacao->getDescricao(),
+            $transacao->getData(),
+            $transacao->getTipo()
+        ]);
     }
 
-    public function adicionarDespesa($transacao)
-    {
-        if ($transacao->getValor() > $this->saldo)
-        {
-            throw new Exception(
-                "Saldo insuficiente!"
-            );
+    public function adicionarReceita($transacao){
+        $this->adicionarTransacao($transacao);
+    }
+
+    public function adicionarDespesa($transacao){
+        if ($transacao->getValor() > $this->getSaldo()) {
+            throw new Exception("Saldo insuficiente!");
         }
 
-        $this->saldo -= $transacao->getValor();
-        $this->historico[] = array(
-            "valor" => $transacao->getValor(),
-            "descricao" => $transacao->getDescricao(),
-            "data" => $transacao->getData(),
-            "tipo" => $transacao->getTipo()
-        );
-        $this->salvar();
+        $this->adicionarTransacao($transacao);
     }
 
-    private function salvar()
-    {
-        $_SESSION["saldo"] = $this->saldo;
-        $_SESSION["historico"] = $this->historico;
+    public function getSaldo(){
+        $sql = "SELECT SUM(
+                    CASE
+                        WHEN tipo = 'entrada' THEN valor
+                        ELSE -valor
+                    END
+                )
+                FROM transacoes";
+
+        $saldo = $this->pdo->query($sql)->fetchColumn();
+
+        return $saldo ?? 0;
     }
 
-    public function getSaldo()
-    {
-        return $this->saldo;
-    }
+    public function getHistorico(){
+        $sql = "SELECT *
+                FROM transacoes
+                ORDER BY data DESC, id DESC";
 
-    public function getHistorico()
-    {
-        return $this->historico;
+        return $this->pdo
+            ->query($sql)
+            ->fetchAll(PDO::FETCH_ASSOC);
     }
 }
