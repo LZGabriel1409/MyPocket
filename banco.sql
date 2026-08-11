@@ -7,7 +7,7 @@ create table transacoes (
     descricao varchar(255) not null,
     valor decimal(10,2) not null,
     tipo enum('entrada', 'saida') not null,
-    data date default current_timestamp
+    data date not null
 );
 
 select * from transacoes;
