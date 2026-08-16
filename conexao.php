@@ -5,12 +5,17 @@ $usuario = "root";
 $senha = "";
 $banco = "mypocket";
 
-$conexao = new mysqli($host, $usuario, $senha, $banco);
+try {
+    $pdo = new PDO(
+        "mysql:host=$host;dbname=$banco;charset=utf8mb4",
+        $usuario,
+        $senha
+    );
 
-if ($conexao->connect_error) {
-    die("Erro na conexão com o banco: " . $conexao->connect_error);
+    $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+    $pdo->setAttribute(PDO::ATTR_DEFAULT_FETCH_MODE, PDO::FETCH_ASSOC);
+} catch (PDOException $erro) {
+    die("Erro na conexão com o banco: " . $erro->getMessage());
 }
-
-$conexao->set_charset("utf8mb4");
 
 ?>

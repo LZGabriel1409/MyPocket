@@ -5,14 +5,24 @@ require_once "classes/Carteira.php";
 
 $carteira = new Carteira();
 
-$mensagem = isset($_SESSION["mensagem"])
-    ? $_SESSION["mensagem"] : "";
-
-$erro = isset($_SESSION["erro"])
-    ? $_SESSION["erro"] : "";
+$mensagem = $_SESSION["mensagem"] ?? "";
+$erro = $_SESSION["erro"] ?? "";
 
 unset($_SESSION["mensagem"]);
 unset($_SESSION["erro"]);
+
+$editar = null;
+if (isset($_GET["editar"])) {
+    $idEditar = filter_input(INPUT_GET, "editar", FILTER_VALIDATE_INT);
+
+    if ($idEditar) {
+        $editar = $carteira->getTransacao($idEditar);
+
+        if (!$editar) {
+            $erro = "Transação não encontrada.";
+        }
+    }
+}
 ?>
 
 <!DOCTYPE html>
@@ -25,61 +35,94 @@ unset($_SESSION["erro"]);
 </head>
 
 <body>
-<div class="container mt-4">
+<div class="container mt-4 mb-5">
     <h1 class="text-center mb-4">Gerenciador Financeiro</h1>
 
-    <?php if($mensagem != "") { ?>
-    <div class="alert alert-success">
-        <?php echo $mensagem; ?>
-    </div>
+    <?php if ($mensagem !== "") { ?>
+        <div class="alert alert-success">
+            <?php echo htmlspecialchars($mensagem); ?>
+        </div>
     <?php } ?>
 
-    <?php if($erro != "") { ?>
-    <div class="alert alert-danger">
-        <?php echo $erro; ?>
-    </div>
+    <?php if ($erro !== "") { ?>
+        <div class="alert alert-danger">
+            <?php echo htmlspecialchars($erro); ?>
+        </div>
     <?php } ?>
 
     <div class="card mb-4">
         <div class="card-body text-center">
             <h3>Saldo Atual</h3>
-            <h1>R$<?php echo number_format($carteira->getSaldo(),2,",","."); ?></h1>
+            <h1>R$ <?php echo number_format($carteira->getSaldo(), 2, ",", "."); ?></h1>
         </div>
     </div>
 
     <div class="card mb-4">
-        <div class="card-header">Nova Transação</div>
+        <div class="card-header">
+            <?php echo $editar ? "Editar Transação" : "Nova Transação"; ?>
+        </div>
 
         <div class="card-body">
             <form action="processar.php" method="POST">
 
-            <div class="mb-3">
-                <label>Valor</label>
-                <input type="number" step="0.01" name="valor" class="form-control" required>
-            </div>
+                <input type="hidden" name="acao" value="<?php echo $editar ? "editar" : "criar"; ?>">
 
-            <div class="mb-3">
-                <label>Descrição</label>
-                <input type="text" name="descricao" class="form-control" required>
-            </div>
+                <?php if ($editar) { ?>
+                    <input type="hidden" name="id" value="<?php echo (int) $editar["id"]; ?>">
+                <?php } ?>
 
-            <div class="mb-3">
-                <label>Data</label>
-                <input type="date" name="data" class="form-control" required>
-            </div>
+                <div class="mb-3">
+                    <label class="form-label">Valor</label>
+                    <input
+                        type="number"
+                        step="0.01"
+                        min="0.01"
+                        name="valor"
+                        class="form-control"
+                        value="<?php echo $editar ? htmlspecialchars($editar["valor"]) : ""; ?>"
+                        required
+                    >
+                </div>
 
-            <div class="mb-3">
-                <label>Tipo</label>
-                <select name="tipo" class="form-select">
-                    <option value="entrada">Entrada</option>
-                    <option value="saida">Saída</option>
-                </select>
-            </div>
+                <div class="mb-3">
+                    <label class="form-label">Descrição</label>
+                    <input
+                        type="text"
+                        name="descricao"
+                        class="form-control"
+                        value="<?php echo $editar ? htmlspecialchars($editar["descricao"]) : ""; ?>"
+                        required
+                    >
+                </div>
 
-            <button class="btn btn-primary w-100">Cadastrar</button>
+                <div class="mb-3">
+                    <label class="form-label">Data</label>
+                    <input
+                        type="date"
+                        name="data"
+                        class="form-control"
+                        value="<?php echo $editar ? htmlspecialchars($editar["data"]) : date("Y-m-d"); ?>"
+                        required
+                    >
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label">Tipo</label>
+                    <select name="tipo" class="form-select" required>
+                        <option value="entrada" <?php echo ($editar && $editar["tipo"] === "entrada") ? "selected" : ""; ?>>Entrada</option>
+                        <option value="saida" <?php echo ($editar && $editar["tipo"] === "saida") ? "selected" : ""; ?>>Saída</option>
+                    </select>
+                </div>
+
+                <button class="btn btn-primary">
+                    <?php echo $editar ? "Salvar alterações" : "Cadastrar"; ?>
+                </button>
+
+                <?php if ($editar) { ?>
+                    <a href="index.php" class="btn btn-secondary">Cancelar</a>
+                <?php } ?>
 
             </form>
-
         </div>
     </div>
 
@@ -87,33 +130,54 @@ unset($_SESSION["erro"]);
         <div class="card-header">Histórico</div>
 
         <div class="card-body">
-            <table class="table">
-                <tr>
-                    <th>Data</th>
-                    <th>Descrição</th>
-                    <th>Tipo</th>
-                    <th>Valor</th>
-                </tr>
+            <?php $historico = $carteira->getHistorico(); ?>
 
-                <?php foreach(array_reverse($carteira->getHistorico()) as $item){ ?>
+            <?php if (count($historico) === 0) { ?>
+                <p class="text-center mb-0">Nenhuma transação cadastrada.</p>
+            <?php } else { ?>
+                <div class="table-responsive">
+                    <table class="table align-middle">
+                        <thead>
+                            <tr>
+                                <th>Data</th>
+                                <th>Descrição</th>
+                                <th>Tipo</th>
+                                <th>Valor</th>
+                                <th>Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php foreach ($historico as $item) { ?>
+                                <tr>
+                                    <td><?php echo htmlspecialchars($item["data"]); ?></td>
+                                    <td><?php echo htmlspecialchars($item["descricao"]); ?></td>
+                                    <td>
+                                        <?php if ($item["tipo"] === "entrada") { ?>
+                                            <span class="badge bg-success">Entrada</span>
+                                        <?php } else { ?>
+                                            <span class="badge bg-danger">Saída</span>
+                                        <?php } ?>
+                                    </td>
+                                    <td>R$ <?php echo number_format($item["valor"], 2, ",", "."); ?></td>
+                                    <td>
+                                        <a href="index.php?editar=<?php echo (int) $item["id"]; ?>" class="btn btn-sm btn-warning">
+                                            Editar
+                                        </a>
 
-                <tr>
-                    <td><?php echo $item["data"]; ?></td>
-                    <td><?php echo $item["descricao"]; ?></td>
-                    <td>
-                        <?php if($item["tipo"] == "entrada"){ ?>
-                        <span class="badge bg-success">Entrada</span>
-                        <?php } else{ ?>
-                        <span class="badge bg-danger">Saída</span>
-                        <?php } ?>
-                    </td>
-                    <td>R$ <?php echo number_format($item["valor"],2,",","."); ?></td>
-                </tr>
-                <?php } ?>
-            </table>
+                                        <form action="processar.php" method="POST" class="d-inline" onsubmit="return confirm('Deseja realmente excluir esta transação?');">
+                                            <input type="hidden" name="acao" value="excluir">
+                                            <input type="hidden" name="id" value="<?php echo (int) $item["id"]; ?>">
+                                            <button type="submit" class="btn btn-sm btn-danger">Excluir</button>
+                                        </form>
+                                    </td>
+                                </tr>
+                            <?php } ?>
+                        </tbody>
+                    </table>
+                </div>
+            <?php } ?>
         </div>
     </div>
 </div>
-
 </body>
 </html>
